@@ -20,14 +20,7 @@ sed -i "s/hostname='OpenWrt'/hostname='OpenWrt-SE'/g" ./package/base-files/files
 # curl -fsSL  https://raw.githubusercontent.com/firkerword/luci-app-bypass/main/Makefile > ./package/luci-app-bypass/Makefile
 # Modify default IP
 
-sed -i "/uci commit fstab/a\uci commit network" $ZZZ
-sed -i "/uci commit network/i\uci set network.lan.ipaddr='192.168.100.222'" $ZZZ              # IPv4 地址(openwrt后台地址)
-sed -i "/uci commit network/i\uci set network.lan.netmask='255.255.255.0'" $ZZZ           # IPv4 子网掩码
-sed -i "/uci commit network/i\uci set network.lan.gateway='192.168.100.254'" $ZZZ             # IPv4 网关
-sed -i "/uci commit network/i\uci set network.lan.broadcast='192.168.100.255'" $ZZZ         # IPv4 广播
-sed -i "/uci commit network/i\uci set network.lan.dns='223.5.5.5 114.114.114.114'" $ZZZ   # DNS(多个DNS要用空格分开)
-sed -i "/uci commit network/i\uci set network.lan.delegate='0'" $ZZZ                      # 去掉LAN口使用内置的 IPv6 管理
-
+sed -i 's/192.168.1.1/192.168.100.222/g' package/base-files/files/bin/config_generate
 sed -i '/uci commit system/i\uci set system.@system[0].hostname='OpenWrt'' package/lean/default-settings/files/zzz-default-settings
 sed -i "s/OpenWrt /Star $(TZ=UTC-8 date "+%Y.%m.%d") @ OpenWrt /g" package/lean/default-settings/files/zzz-default-settings
 sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
