@@ -109,7 +109,7 @@ jobs:
       - name: Compile firmware
         id: compile
         run: |
-          set -e
+          set -euo pipefail
           cd openwrt
           export CCACHE_DIR=/workdir/.ccache
           export USE_CCACHE=1
@@ -163,6 +163,7 @@ jobs:
             - Target: x86_64
             - Default IP: `192.168.100.222`
             - Theme: Argon
+            - Repo: jianhuashao6/OpenWrt
             - Workflow: build-x86.yml
           files: ${{ env.FIRMWARE }}/*
         env:

@@ -1,9 +1,12 @@
-!.gitignore
-/make-openwrt/kernel
-/make-openwrt/u-boot
-/openwrt
-/openwrt-armvirt
-/out
-/tmp
+# Build leftovers
+openwrt/
+bin/
+build_dir/
+staging_dir/
+tmp/
+dl/
+.ccache/
+*.o
+*.swp
+*~
 .DS_Store
-npm-debug.log*
