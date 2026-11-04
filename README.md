@@ -12,11 +12,22 @@
 
 | 项目 | 说明 |
 |------|------|
-| 源码 | [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) `master` |
+| 源码 | [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) `master`（**每次编译重新拉取最新**） |
 | 架构 | **X86_64** 通用设备 |
 | 默认 IP | `192.168.100.222` |
 | 默认主题 | Argon |
 | 工作流 | 仅 `X86设备编译固件 (lede-master)` |
+| 自动编译 | **每周日** 自动跑一次（见下） |
+
+## 自动拉取最新源码
+
+- **每次**手动或定时触发编译时，工作流都会重新 `git clone` [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) 的 `master`（`--depth=1`），因此固件始终基于当时最新源码与 feeds。
+- **定时：** 每周日 **09:00 UTC**（约北京时间 17:00 / 日本 18:00）自动编译一次。
+- Release 说明中会写入当次 lede 的短 commit，便于对照版本。
+- 若要改频率：编辑 `.github/workflows/build-x86.yml` 里的 `schedule.cron`（[cron 语法](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule)）。
+- 若要暂停自动编译：在该文件中注释或删除 `schedule` 段即可。
+
+> 说明：仓库里的 `config/` 不会自动改写；变的是上游 lede 源码。你本地的插件/配置仍以本仓库 `config/lede-master/` 为准。
 
 ## 使用方法
 
@@ -48,11 +59,15 @@ https://github.com/jianhuashao6/OpenWrt
 
 ### 4. 开始编译
 
+**手动：**
+
 1. 打开 **Actions**
 2. 左侧选择 **X86设备编译固件 (lede-master)**
 3. 右侧点击 **Run workflow**
 4. 分支选 `main`（或用于试验的 `dev`）
 5. 再点 **Run workflow** 确认
+
+**自动：** 每周日定时任务会自行启动（无需点击）。
 
 本仓库**只有这一个**编译工作流，无需像原版那样选择「通用设备 / 电视盒子」。
 
@@ -83,7 +98,7 @@ https://github.com/jianhuashao6/OpenWrt
 
 ```
 .
-├── .github/workflows/build-x86.yml   # 唯一编译工作流
+├── .github/workflows/build-x86.yml   # 唯一编译工作流（含定时）
 ├── config/
 │   ├── README.md
 │   └── lede-master/
@@ -101,6 +116,7 @@ https://github.com/jianhuashao6/OpenWrt
 - ccache 按 config 哈希复用
 - 默认 LAN：`192.168.100.222`，主题 Argon
 - 不强制改写内核版本
+- 每周自动用最新 lede 源码编译
 
 ## 旁路由说明
 
