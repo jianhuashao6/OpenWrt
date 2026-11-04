@@ -2,7 +2,7 @@
 
 **本仓库：** https://github.com/jianhuashao6/OpenWrt
 
-在 [xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt)（原作者云编译方案）基础上，经 [cs-star/OpenWrt](https://github.com/cs-star/OpenWrt) 精简后继续维护：只保留 **lede + X86_64**，去掉电视盒子、多源码分支与 Docker 相关内容，便于旁路由/软路由长期自用编译。
+在 [xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt)（原作者云编译方案）基础上精简维护：只保留 **lede + X86_64**，去掉电视盒子、多源码分支与 Docker 相关内容，便于旁路由/软路由长期自用编译。
 
 感谢原作者 **xinlingduyu** 提供的 Actions 云编译思路与仓库结构。
 
@@ -14,7 +14,6 @@
 | 架构 | **X86_64** 通用设备 |
 | 默认 IP | `192.168.100.222` |
 | 默认主题 | Argon |
-
 
 ## 使用方法
 
@@ -71,7 +70,6 @@ OpenClash 作旁路由时建议开启「旁路由兼容」，清空 WAN 接口�
 ## 致谢
 
 - 云编译方案原作者：[xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt)  
-- 中间精简维护：[cs-star/OpenWrt](https://github.com/cs-star/OpenWrt)  
 - OpenWrt 源码：[coolsnowwolf/lede](https://github.com/coolsnowwolf/lede)  
 
 ## 说明
