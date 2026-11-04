@@ -1,5 +1,5 @@
 #============================================================================================
-# X86 only - lede-master
+# X86 only - lede-master (focused fork)
 #============================================================================================
 
 name: X86设备编译固件 (lede-master)
@@ -41,36 +41,47 @@ jobs:
       - name: Init environment
         run: |
           set -e
+          sudo timedatectl set-timezone "$TZ"
           sudo -E apt-get -y update
-          sudo -E apt-get -y install $(curl -fsSL https://is.gd/depend_ubuntu2204_openwrt)
+          # 固定依赖列表，避免短链失效；覆盖 lede/OpenWrt 常用编译依赖
+          sudo -E apt-get -y install --no-install-recommends \
+            ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext git \
+            gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev \
+            libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev \
+            libpython3-dev libreadline-dev libssl-dev libtool libyaml-dev libz-dev lrzsz \
+            mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 \
+            python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion \
+            swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
           sudo -E apt-get -y autoremove --purge
           sudo -E apt-get clean
-          sudo timedatectl set-timezone "$TZ"
           sudo mkdir -p /workdir
-          sudo chown $USER:$USER /workdir
+          sudo chown "$USER:$USER" /workdir
 
       - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: /workdir/.ccache
-          key: ccache-x86-${{ github.run_id }}
+          key: ccache-x86-lede-${{ hashFiles('config/lede-master/config') }}-${{ github.sha }}
           restore-keys: |
+            ccache-x86-lede-${{ hashFiles('config/lede-master/config') }}-
+            ccache-x86-lede-
             ccache-x86-
 
       - name: Clone lede source
         working-directory: /workdir
         run: |
           set -e
-          git clone -q --single-branch --depth=1 --branch=$REPO_BRANCH $REPO_URL openwrt
-          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+          git clone -q --single-branch --depth=1 --branch="$REPO_BRANCH" "$REPO_URL" openwrt
+          ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
           df -hT
 
       - name: Load diy-part1 & feeds
         run: |
           set -e
           cd openwrt
-          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH
-          $GITHUB_WORKSPACE/$DIY_P1_SH
+          chmod +x "$GITHUB_WORKSPACE/$DIY_P1_SH"
+          "$GITHUB_WORKSPACE/$DIY_P1_SH"
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -78,16 +89,21 @@ jobs:
         run: |
           set -e
           cd openwrt
-          [ -f "$GITHUB_WORKSPACE/$CONFIG_FILE" ] && cp -f $GITHUB_WORKSPACE/$CONFIG_FILE .config
-          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
-          $GITHUB_WORKSPACE/$DIY_P2_SH
+          if [ -f "$GITHUB_WORKSPACE/$CONFIG_FILE" ]; then
+            cp -f "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
+          else
+            echo "ERROR: missing $CONFIG_FILE" >&2
+            exit 1
+          fi
+          chmod +x "$GITHUB_WORKSPACE/$DIY_P2_SH"
+          "$GITHUB_WORKSPACE/$DIY_P2_SH"
           make defconfig
 
       - name: Download packages
         run: |
           set -e
           cd openwrt
-          make download -j$(nproc)
+          make download -j"$(nproc)"
           find dl -size -1024c -exec rm -f {} \; || true
 
       - name: Compile firmware
@@ -95,10 +111,28 @@ jobs:
         run: |
           set -e
           cd openwrt
+          export CCACHE_DIR=/workdir/.ccache
+          export USE_CCACHE=1
           echo ">>> $(nproc) threads compiling..."
-          make -j$(nproc) || make -j1 V=s
-          echo "status=success" >> $GITHUB_ENV
+          if make -j"$(nproc)"; then
+            echo "status=success" >> "$GITHUB_ENV"
+          else
+            echo "Parallel build failed, retrying with -j1 V=s ..."
+            make -j1 V=s 2>&1 | tee /tmp/openwrt-build-fail.log
+            echo "status=success" >> "$GITHUB_ENV"
+          fi
           df -hT
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-build-log-${{ github.run_id }}
+          path: |
+            /tmp/openwrt-build-fail.log
+            openwrt/logs
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Organize firmware
         if: env.status == 'success' && !cancelled()
@@ -106,8 +140,8 @@ jobs:
           set -e
           cd openwrt/bin/targets/*/*
           rm -rf packages
-          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-          echo "FILE_DATE=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+          echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
+          echo "FILE_DATE=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
           ls -lh
 
       - name: Upload firmware artifact
@@ -125,10 +159,11 @@ jobs:
           tag_name: x86-${{ env.FILE_DATE }}
           name: OpenWrt X86_64 ${{ env.FILE_DATE }}
           body: |
-            - Source: coolsnowwolf/lede
+            - Source: coolsnowwolf/lede (`master`)
             - Target: x86_64
-            - Default IP: 192.168.100.222
+            - Default IP: `192.168.100.222`
             - Theme: Argon
+            - Workflow: build-x86.yml
           files: ${{ env.FIRMWARE }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
