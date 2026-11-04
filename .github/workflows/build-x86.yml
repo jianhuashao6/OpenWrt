@@ -1,5 +1,6 @@
 #============================================================================================
 # X86 only - lede-master (focused fork)
+# 每次运行都会重新克隆 coolsnowwolf/lede 最新 master
 #============================================================================================
 
 name: X86设备编译固件 (lede-master)
@@ -7,6 +8,9 @@ name: X86设备编译固件 (lede-master)
 on:
   workflow_dispatch:
   repository_dispatch:
+  # 每周日 09:00 UTC（约北京时间 17:00 / 日本 18:00）自动拉取最新源码并编译
+  schedule:
+    - cron: '0 9 * * 0'
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
@@ -23,7 +27,12 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
-    if: github.event.repository.owner.id == github.event.sender.id
+    # schedule 无人工 sender；手动/仓库事件仍限制为仓库所有者触发
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch' ||
+      github.event.repository.owner.id == github.event.sender.id
 
     steps:
       - name: Checkout
@@ -68,12 +77,18 @@ jobs:
             ccache-x86-lede-
             ccache-x86-
 
-      - name: Clone lede source
+      - name: Clone latest lede source
         working-directory: /workdir
         run: |
           set -e
+          echo ">>> Cloning $REPO_URL branch $REPO_BRANCH (latest)"
           git clone -q --single-branch --depth=1 --branch="$REPO_BRANCH" "$REPO_URL" openwrt
           ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+          cd openwrt
+          echo "LEDE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "LEDE_COMMIT_SHORT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo ">>> lede commit: $(git rev-parse HEAD)"
+          git log -1 --oneline
           df -hT
 
       - name: Load diy-part1 & feeds
@@ -160,11 +175,13 @@ jobs:
           name: OpenWrt X86_64 ${{ env.FILE_DATE }}
           body: |
             - Source: coolsnowwolf/lede (`master`)
+            - Commit: `${{ env.LEDE_COMMIT_SHORT }}`
             - Target: x86_64
             - Default IP: `192.168.100.222`
             - Theme: Argon
             - Repo: jianhuashao6/OpenWrt
             - Workflow: build-x86.yml
+            - Trigger: ${{ github.event_name }}
           files: ${{ env.FIRMWARE }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
