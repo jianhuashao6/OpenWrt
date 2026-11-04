@@ -1,8 +1,10 @@
 # 云编译 OpenWrt（仅 X86 / lede）
 
-基于 [cs-star/OpenWrt](https://github.com/cs-star/OpenWrt) 的精简 fork：只保留 **lede + X86_64**，去掉电视盒子、多源码分支与 Docker 相关内容，便于旁路由/软路由长期自用编译。
-
 **本仓库：** https://github.com/jianhuashao6/OpenWrt
+
+在 [xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt)（原作者云编译方案）基础上，经 [cs-star/OpenWrt](https://github.com/cs-star/OpenWrt) 精简后继续维护：只保留 **lede + X86_64**，去掉电视盒子、多源码分支与 Docker 相关内容，便于旁路由/软路由长期自用编译。
+
+感谢原作者 **xinlingduyu** 提供的 Actions 云编译思路与仓库结构。
 
 ## 当前支持
 
@@ -49,7 +51,9 @@
 └── README.md
 ```
 
-## 本 fork 要点
+## 相对原版的主要差异
+
+原版 [xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt) 支持官方 / lede / lienol / immortalwrt 及电视盒子打包等。本仓库刻意收窄为：
 
 - 只编译 lede `master` → X86_64  
 - 无电视盒子打包、无 Docker 流程  
@@ -63,6 +67,12 @@
 刷机后管理地址一般为 `http://192.168.100.222`。  
 OpenClash 作旁路由时建议开启「旁路由兼容」，清空 WAN 接口名，并同步更新 Meta 内核。  
 `.config` 中若同时有 OpenClash 与 PassWall，建议只启用其中一个，避免冲突。
+
+## 致谢
+
+- 云编译方案原作者：[xinlingduyu/build-openwrt](https://github.com/xinlingduyu/build-openwrt)  
+- 中间精简维护：[cs-star/OpenWrt](https://github.com/cs-star/OpenWrt)  
+- OpenWrt 源码：[coolsnowwolf/lede](https://github.com/coolsnowwolf/lede)  
 
 ## 说明
 
