@@ -12,6 +12,14 @@ on:
   schedule:
     - cron: '0 9 * * 0'
 
+concurrency:
+  group: build-x86-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write
+
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
@@ -27,7 +35,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
-    # schedule 无人工 sender；手动/仓库事件仍限制为仓库所有者触发
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
@@ -42,8 +49,11 @@ jobs:
         run: |
           set -e
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+            /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" \
+            /usr/share/swift /usr/local/.ghcup || true
           sudo docker system prune -af || true
+          sudo swapoff -a || true
+          sudo rm -f /swapfile || true
           sudo apt-get clean
           df -hT
 
@@ -52,20 +62,21 @@ jobs:
           set -e
           sudo timedatectl set-timezone "$TZ"
           sudo -E apt-get -y update
-          # 固定依赖列表，避免短链失效；覆盖 lede/OpenWrt 常用编译依赖
+          # Ubuntu 22.04 常用编译依赖（避免过时/不存在的包名导致安装失败）
           sudo -E apt-get -y install --no-install-recommends \
-            ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-            bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext git \
-            gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev \
-            libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev \
-            libpython3-dev libreadline-dev libssl-dev libtool libyaml-dev libz-dev lrzsz \
-            mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 \
-            python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion \
-            swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3-distutils python3-setuptools \
+            python3-pyelftools rsync unzip zlib1g-dev file wget curl ccache \
+            libelf-dev ecj fastjar java-propose-classpath python3 python3-dev \
+            libsnmp-dev libfuse-dev libreadline-dev liblzma-dev libpam0g-dev \
+            libcap-dev libxml2-dev libxslt1-dev zlib1g-dev libzstd-dev \
+            xsltproc swig time quilt subversion quilt zip p7zip-full \
+            genisoimage qemu-utils
           sudo -E apt-get -y autoremove --purge
           sudo -E apt-get clean
           sudo mkdir -p /workdir
           sudo chown "$USER:$USER" /workdir
+          ccache -M 5G || true
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -77,13 +88,33 @@ jobs:
             ccache-x86-lede-
             ccache-x86-
 
+      - name: Cache OpenWrt downloads
+        uses: actions/cache@v4
+        with:
+          path: /workdir/openwrt/dl
+          key: dl-x86-lede-${{ hashFiles('config/lede-master/config') }}-${{ github.run_id }}
+          restore-keys: |
+            dl-x86-lede-${{ hashFiles('config/lede-master/config') }}-
+            dl-x86-lede-
+
       - name: Clone latest lede source
         working-directory: /workdir
         run: |
           set -e
           echo ">>> Cloning $REPO_URL branch $REPO_BRANCH (latest)"
+          # 保留已缓存的 dl/（若存在）
+          if [ -d openwrt/dl ]; then
+            mv openwrt/dl /tmp/openwrt-dl-cache
+          fi
+          rm -rf openwrt
           git clone -q --single-branch --depth=1 --branch="$REPO_BRANCH" "$REPO_URL" openwrt
-          ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+          if [ -d /tmp/openwrt-dl-cache ]; then
+            mkdir -p openwrt/dl
+            # 合并缓存，不覆盖新空目录结构问题：直接移回
+            rsync -a /tmp/openwrt-dl-cache/ openwrt/dl/ || mv /tmp/openwrt-dl-cache/* openwrt/dl/ || true
+            rm -rf /tmp/openwrt-dl-cache
+          fi
+          ln -sfn /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
           cd openwrt
           echo "LEDE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "LEDE_COMMIT_SHORT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
@@ -119,7 +150,7 @@ jobs:
           set -e
           cd openwrt
           make download -j"$(nproc)"
-          find dl -size -1024c -exec rm -f {} \; || true
+          find dl -type f -size -1024c -delete || true
 
       - name: Compile firmware
         id: compile
@@ -128,7 +159,9 @@ jobs:
           cd openwrt
           export CCACHE_DIR=/workdir/.ccache
           export USE_CCACHE=1
+          export CCACHE_BASEDIR="$PWD"
           echo ">>> $(nproc) threads compiling..."
+          START_TS=$(date +%s)
           if make -j"$(nproc)"; then
             echo "status=success" >> "$GITHUB_ENV"
           else
@@ -136,6 +169,9 @@ jobs:
             make -j1 V=s 2>&1 | tee /tmp/openwrt-build-fail.log
             echo "status=success" >> "$GITHUB_ENV"
           fi
+          END_TS=$(date +%s)
+          echo "BUILD_MINUTES=$(( (END_TS - START_TS) / 60 ))" >> "$GITHUB_ENV"
+          ccache -s || true
           df -hT
 
       - name: Upload build log on failure
@@ -155,6 +191,9 @@ jobs:
           set -e
           cd openwrt/bin/targets/*/*
           rm -rf packages
+          # 去掉过大的未压缩镜像（保留常用压缩格式与校验文件）
+          find . -maxdepth 1 -type f -name '*-ext4-combined.img' -delete || true
+          find . -maxdepth 1 -type f -name '*-squashfs-combined.img' -delete || true
           echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
           echo "FILE_DATE=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
           ls -lh
@@ -179,12 +218,28 @@ jobs:
             - Target: x86_64
             - Default IP: `192.168.100.222`
             - Theme: Argon
+            - Build time: ~${{ env.BUILD_MINUTES }} min
             - Repo: jianhuashao6/OpenWrt
-            - Workflow: build-x86.yml
             - Trigger: ${{ github.event_name }}
           files: ${{ env.FIRMWARE }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## OpenWrt X86 编译摘要"
+            echo
+            echo "| 项 | 值 |"
+            echo "|----|----|"
+            echo "| 触发 | ${{ github.event_name }} |"
+            echo "| 分支 | ${{ github.ref_name }} |"
+            echo "| lede | \`${{ env.LEDE_COMMIT_SHORT }}\` |"
+            echo "| 状态 | ${{ env.status || 'failed' }} |"
+            echo "| 耗时 | ~${{ env.BUILD_MINUTES || '?' }} min |"
+            echo "| 默认 IP | 192.168.100.222 |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup old runs
         if: always()
