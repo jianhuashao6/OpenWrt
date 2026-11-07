@@ -14,7 +14,7 @@
 |------|------|
 | 源码 | [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) `master`（**每次编译重新拉取最新**） |
 | 架构 | **X86_64** 通用设备 |
-| 默认 IP | `192.168.100.222` |
+| 默认 IP | `192.168.100.253` |
 | 默认主题 | Argon |
 | 工作流 | 仅 `X86设备编译固件 (lede-master)` |
 | 自动编译 | **每周日** 自动跑一次（见下） |
@@ -55,7 +55,7 @@ https://github.com/jianhuashao6/OpenWrt
 | [`config/lede-master/diy-part1.sh`](config/lede-master/diy-part1.sh) | feeds 更新**前**钩子（加 feed、删包等） |
 | [`config/lede-master/diy-part2.sh`](config/lede-master/diy-part2.sh) | feeds 更新**后**钩子（默认 IP、主题、版本信息） |
 
-默认 LAN IP 已在 `diy-part2.sh` 中设为 `192.168.100.222`。改其它地址时，在该脚本中搜索并替换即可。
+默认 LAN IP 已在 `diy-part2.sh` 中设为 `192.168.100.253`。改其它地址时，在该脚本中搜索并替换即可。
 
 ### 4. 开始编译
 
@@ -81,7 +81,7 @@ https://github.com/jianhuashao6/OpenWrt
 
 ### 6. 刷机后访问
 
-管理地址一般为：`http://192.168.100.222`
+管理地址一般为：`http://192.168.100.253`
 
 ## 与原版视频教程的差异
 
@@ -114,13 +114,13 @@ https://github.com/jianhuashao6/OpenWrt
 - 无电视盒子打包、无 Docker 流程
 - 工作流使用固定 apt 依赖（不依赖短链）
 - ccache 按 config 哈希复用
-- 默认 LAN：`192.168.100.222`，主题 Argon
+- 默认 LAN：`192.168.100.253`，主题 Argon
 - 不强制改写内核版本
 - 每周自动用最新 lede 源码编译
 
 ## 旁路由说明
 
-刷机后管理地址一般为 `http://192.168.100.222`。  
+刷机后管理地址一般为 `http://192.168.100.253`。  
 OpenClash 作旁路由时建议开启「旁路由兼容」，清空 WAN 接口名，并同步更新 Meta 内核。  
 `.config` 中若同时有 OpenClash 与 PassWall，建议只启用其中一个，避免冲突。
 

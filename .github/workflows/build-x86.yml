@@ -216,7 +216,7 @@ jobs:
             - Source: coolsnowwolf/lede (`master`)
             - Commit: `${{ env.LEDE_COMMIT_SHORT }}`
             - Target: x86_64
-            - Default IP: `192.168.100.222`
+            - Default IP: `192.168.100.253`
             - Theme: Argon
             - Build time: ~${{ env.BUILD_MINUTES }} min
             - Repo: jianhuashao6/OpenWrt
@@ -238,7 +238,7 @@ jobs:
             echo "| lede | \`${{ env.LEDE_COMMIT_SHORT }}\` |"
             echo "| 状态 | ${{ env.status || 'failed' }} |"
             echo "| 耗时 | ~${{ env.BUILD_MINUTES || '?' }} min |"
-            echo "| 默认 IP | 192.168.100.222 |"
+            echo "| 默认 IP | 192.168.100.253 |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup old runs

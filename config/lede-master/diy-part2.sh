@@ -48,16 +48,16 @@ else
   log "未找到 $release_file，跳过源码标识设置。"
 fi
 
-# Default LAN IP → 192.168.100.222
+# Default LAN IP → 192.168.100.253
 cfg_gen="package/base-files/files/bin/config_generate"
 if [ -f "$cfg_gen" ]; then
-  sed -i 's/192.168.1.1/192.168.100.222/g' "$cfg_gen"
-  log "默认 IP 已改为 192.168.100.222"
+  sed -i 's/192.168.1.1/192.168.100.253/g' "$cfg_gen"
+  log "默认 IP 已改为 192.168.100.253"
 else
   log "未找到 $cfg_gen，跳过 IP 修改。"
 fi
 if [ -f "$settings_file" ]; then
-  sed -i 's/192.168.1.1/192.168.100.222/g' "$settings_file" || true
+  sed -i 's/192.168.1.1/192.168.100.253/g' "$settings_file" || true
 fi
 
 # Optional third-party packages and patches should be added only after

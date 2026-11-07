@@ -18,7 +18,7 @@
    编辑 [`lede-master/config`](https://github.com/jianhuashao6/OpenWrt/blob/main/config/lede-master/config)，或本地 `make menuconfig` 后把生成的 `.config` 覆盖回去。
 
 2. **默认 IP**  
-   已在 [`diy-part2.sh`](https://github.com/jianhuashao6/OpenWrt/blob/main/config/lede-master/diy-part2.sh) 中设为 `192.168.100.222`。若要改成其它地址，搜索并替换该脚本中的 IP 即可。
+   已在 [`diy-part2.sh`](https://github.com/jianhuashao6/OpenWrt/blob/main/config/lede-master/diy-part2.sh) 中设为 `192.168.100.253`。若要改成其它地址，搜索并替换该脚本中的 IP 即可。
 
 3. **额外 feed / 第三方包**  
    在 [`diy-part1.sh`](https://github.com/jianhuashao6/OpenWrt/blob/main/config/lede-master/diy-part1.sh) 中按注释示例取消注释或自行添加（注意与 lede 分支兼容性）。
