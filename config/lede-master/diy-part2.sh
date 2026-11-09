@@ -7,8 +7,30 @@ die() { printf '[diy-part2] ERROR: %s\n' "$*" >&2; exit 1; }
 
 [ -f "include/toplevel.mk" ] || die "请在 OpenWrt 源码根目录执行此脚本。"
 
+# ---------------------------------------------------------------------------
+# Drop broken/optional packages that currently fail to build upstream
+# (helloworld v2ray-plugin 5.49.0 Go module mismatch, 2026-11).
+# OpenClash uses its own Meta core; PassWall can work without v2ray-plugin.
+# ---------------------------------------------------------------------------
+if [ -d feeds/helloworld/v2ray-plugin ]; then
+  rm -rf feeds/helloworld/v2ray-plugin
+  log "已移除 feeds/helloworld/v2ray-plugin（上游 Go 模块编译失败）。"
+fi
+if [ -d package/feeds/helloworld/v2ray-plugin ]; then
+  rm -rf package/feeds/helloworld/v2ray-plugin
+fi
+
+if [ -f .config ]; then
+  # PassWall: do not pull v2ray-plugin
+  sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=y/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config || true
+  sed -i 's/^CONFIG_PACKAGE_v2ray-plugin=y/# CONFIG_PACKAGE_v2ray-plugin is not set/' .config || true
+  sed -i 's/^CONFIG_PACKAGE_v2ray-plugin-git=y/# CONFIG_PACKAGE_v2ray-plugin-git is not set/' .config || true
+  # Prefer not forcing SSR Plus as default app
+  sed -i 's/^CONFIG_DEFAULT_luci-app-ssr-plus=y/# CONFIG_DEFAULT_luci-app-ssr-plus is not set/' .config || true
+  log "已调整 .config：关闭 PassWall 的 V2ray Plugin / 默认 SSR Plus。"
+fi
+
 # Use Argon only when the current LuCI collection still references Bootstrap.
-# The supplied .config already selects luci-theme-argon.
 luci_collection="feeds/luci/collections/luci/Makefile"
 if [ -f "$luci_collection" ] && grep -q 'luci-theme-bootstrap' "$luci_collection"; then
   sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' "$luci_collection"
@@ -17,12 +39,8 @@ else
   log "主题依赖无需修改，或当前 feeds 中不存在 LuCI collection 文件。"
 fi
 
-# Do not force KERNEL_PATCHVER here. The source branch controls its supported
-# kernel versions; keep .config aligned with that branch and let make defconfig
-# resolve dependencies. This avoids the old hard-coded 6.12 override.
+# Do not force KERNEL_PATCHVER; follow upstream lede branch.
 
-# LEDE's first-boot settings script writes the final revision into
-# /etc/openwrt_release using the @BUILD_DATE@ placeholder.
 settings_file="package/lean/default-settings/files/zzz-default-settings"
 build_date="$(date +%Y.%m.%d)"
 if [ -f "$settings_file" ]; then
@@ -59,11 +77,5 @@ fi
 if [ -f "$settings_file" ]; then
   sed -i 's/192.168.1.1/192.168.100.253/g' "$settings_file" || true
 fi
-
-# Optional third-party packages and patches should be added only after
-# checking that their Makefiles and dependencies exist in the selected feeds.
-# Example:
-# svn co https://github.com/ophub/luci-app-amlogic/trunk/luci-app-amlogic package/luci-app-amlogic
-# git apply ../config/patches/0001-example.patch
 
 log "构建后自定义步骤完成。"

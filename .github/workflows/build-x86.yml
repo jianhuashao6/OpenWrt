@@ -62,7 +62,6 @@ jobs:
           set -e
           sudo timedatectl set-timezone "$TZ"
           sudo -E apt-get -y update
-          # Ubuntu 22.04 常用编译依赖（避免过时/不存在的包名导致安装失败）
           sudo -E apt-get -y install --no-install-recommends \
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
             gettext git libncurses-dev libssl-dev python3-distutils python3-setuptools \
@@ -70,13 +69,14 @@ jobs:
             libelf-dev ecj fastjar java-propose-classpath python3 python3-dev \
             libsnmp-dev libfuse-dev libreadline-dev liblzma-dev libpam0g-dev \
             libcap-dev libxml2-dev libxslt1-dev zlib1g-dev libzstd-dev \
-            xsltproc swig time quilt subversion quilt zip p7zip-full \
-            genisoimage qemu-utils
+            xsltproc swig time quilt subversion zip p7zip-full \
+            genisoimage qemu-utils golang-go
           sudo -E apt-get -y autoremove --purge
           sudo -E apt-get clean
           sudo mkdir -p /workdir
           sudo chown "$USER:$USER" /workdir
           ccache -M 5G || true
+          go version || true
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -102,7 +102,6 @@ jobs:
         run: |
           set -e
           echo ">>> Cloning $REPO_URL branch $REPO_BRANCH (latest)"
-          # 保留已缓存的 dl/（若存在）
           if [ -d openwrt/dl ]; then
             mv openwrt/dl /tmp/openwrt-dl-cache
           fi
@@ -110,7 +109,6 @@ jobs:
           git clone -q --single-branch --depth=1 --branch="$REPO_BRANCH" "$REPO_URL" openwrt
           if [ -d /tmp/openwrt-dl-cache ]; then
             mkdir -p openwrt/dl
-            # 合并缓存，不覆盖新空目录结构问题：直接移回
             rsync -a /tmp/openwrt-dl-cache/ openwrt/dl/ || mv /tmp/openwrt-dl-cache/* openwrt/dl/ || true
             rm -rf /tmp/openwrt-dl-cache
           fi
@@ -144,6 +142,13 @@ jobs:
           chmod +x "$GITHUB_WORKSPACE/$DIY_P2_SH"
           "$GITHUB_WORKSPACE/$DIY_P2_SH"
           make defconfig
+          # 二次确保坏包不会被选中
+          if grep -q 'v2ray-plugin' .config 2>/dev/null; then
+            sed -i '/v2ray-plugin/d' .config || true
+            echo '# CONFIG_PACKAGE_v2ray-plugin is not set' >> .config
+            echo '# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
+            make defconfig
+          fi
 
       - name: Download packages
         run: |
@@ -191,7 +196,6 @@ jobs:
           set -e
           cd openwrt/bin/targets/*/*
           rm -rf packages
-          # 去掉过大的未压缩镜像（保留常用压缩格式与校验文件）
           find . -maxdepth 1 -type f -name '*-ext4-combined.img' -delete || true
           find . -maxdepth 1 -type f -name '*-squashfs-combined.img' -delete || true
           echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
@@ -221,6 +225,7 @@ jobs:
             - Build time: ~${{ env.BUILD_MINUTES }} min
             - Repo: jianhuashao6/OpenWrt
             - Trigger: ${{ github.event_name }}
+            - Note: v2ray-plugin excluded (upstream build break)
           files: ${{ env.FIRMWARE }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
