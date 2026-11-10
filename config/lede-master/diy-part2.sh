@@ -8,40 +8,102 @@ die() { printf '[diy-part2] ERROR: %s\n' "$*" >&2; exit 1; }
 [ -f "include/toplevel.mk" ] || die "请在 OpenWrt 源码根目录执行此脚本。"
 
 # ---------------------------------------------------------------------------
-# Drop broken/optional packages that currently fail to build upstream
-# (helloworld v2ray-plugin 5.49.0 Go module mismatch, 2026-11).
-# OpenClash uses its own Meta core; PassWall can work without v2ray-plugin.
+# Drop broken/optional packages (helloworld v2ray-plugin Go module break)
 # ---------------------------------------------------------------------------
 if [ -d feeds/helloworld/v2ray-plugin ]; then
   rm -rf feeds/helloworld/v2ray-plugin
-  log "已移除 feeds/helloworld/v2ray-plugin（上游 Go 模块编译失败）。"
+  log "已移除 feeds/helloworld/v2ray-plugin。"
 fi
-if [ -d package/feeds/helloworld/v2ray-plugin ]; then
-  rm -rf package/feeds/helloworld/v2ray-plugin
+rm -rf package/feeds/helloworld/v2ray-plugin 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Argon: 必须从 jerrykuku 拉取源码（lede 未必自带可用 Argon）
+# 其它主题目录删除，避免被编进固件；默认主题统一改为 argon
+# ---------------------------------------------------------------------------
+log "配置唯一默认主题：luci-theme-argon…"
+
+# 去掉源码树里可能冲突/过时的 Argon 与其它主题
+rm -rf package/lean/luci-theme-argon \
+  feeds/luci/themes/luci-theme-argon \
+  package/feeds/luci/luci-theme-argon 2>/dev/null || true
+
+for th in bootstrap material openwrt openwrt-2020 design netgear neobird infinityfreedom argon-mod; do
+  rm -rf "feeds/luci/themes/luci-theme-${th}" \
+    "package/feeds/luci/luci-theme-${th}" \
+    "package/lean/luci-theme-${th}" 2>/dev/null || true
+done
+
+# 拉取官方维护的 Argon（master 适配较新 LuCI / 当前 lede）
+rm -rf package/luci-theme-argon
+git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+log "已克隆 jerrykuku/luci-theme-argon → package/luci-theme-argon"
+
+# 可选：主题配置插件（体积小，方便改壁纸等）
+if [ ! -d package/luci-app-argon-config ]; then
+  git clone --depth=1 https://github.com/jerrykuku/luci-app-argon-config.git package/luci-app-argon-config 2>/dev/null \
+    && log "已克隆 luci-app-argon-config" \
+    || log "luci-app-argon-config 克隆失败（可忽略）。"
 fi
 
+# LuCI 集合默认依赖：bootstrap/design → argon
+if [ -d feeds/luci/collections ]; then
+  while IFS= read -r -d '' mk; do
+    sed -i \
+      -e 's/luci-theme-bootstrap/luci-theme-argon/g' \
+      -e 's/luci-theme-design/luci-theme-argon/g' \
+      -e 's/luci-theme-material/luci-theme-argon/g' \
+      -e 's/luci-theme-openwrt-2020/luci-theme-argon/g' \
+      -e 's/luci-theme-openwrt/luci-theme-argon/g' \
+      "$mk"
+  done < <(find feeds/luci/collections -type f -name Makefile -print0 2>/dev/null)
+  log "已将 feeds/luci/collections 默认主题依赖改为 luci-theme-argon。"
+fi
+
+# 首次启动强制 mediaurlbase=argon（防止仍指向其它主题）
+settings_file="package/lean/default-settings/files/zzz-default-settings"
+if [ -f "$settings_file" ]; then
+  if ! grep -q "luci.main.mediaurlbase='/luci-static/argon'" "$settings_file"; then
+    # 插在 exit 0 之前；若无 exit 0 则追加
+    if grep -q '^exit 0' "$settings_file"; then
+      sed -i "/exit 0/i\uci set luci.main.mediaurlbase='/luci-static/argon'\nuci commit luci" "$settings_file"
+    else
+      printf "\nuci set luci.main.mediaurlbase='/luci-static/argon'\nuci commit luci\n" >> "$settings_file"
+    fi
+    log "已在 default-settings 中写入 Argon 为默认主题。"
+  fi
+fi
+
+# .config：只保留 Argon，关掉其它主题包
 if [ -f .config ]; then
-  # PassWall: do not pull v2ray-plugin
   sed -i 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=y/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' .config || true
   sed -i 's/^CONFIG_PACKAGE_v2ray-plugin=y/# CONFIG_PACKAGE_v2ray-plugin is not set/' .config || true
   sed -i 's/^CONFIG_PACKAGE_v2ray-plugin-git=y/# CONFIG_PACKAGE_v2ray-plugin-git is not set/' .config || true
-  # Prefer not forcing SSR Plus as default app
   sed -i 's/^CONFIG_DEFAULT_luci-app-ssr-plus=y/# CONFIG_DEFAULT_luci-app-ssr-plus is not set/' .config || true
-  log "已调整 .config：关闭 PassWall 的 V2ray Plugin / 默认 SSR Plus。"
-fi
 
-# Use Argon only when the current LuCI collection still references Bootstrap.
-luci_collection="feeds/luci/collections/luci/Makefile"
-if [ -f "$luci_collection" ] && grep -q 'luci-theme-bootstrap' "$luci_collection"; then
-  sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' "$luci_collection"
-  log "默认 LuCI 主题依赖已切换为 luci-theme-argon。"
-else
-  log "主题依赖无需修改，或当前 feeds 中不存在 LuCI collection 文件。"
+  # 启用 Argon（及配置插件，若存在）
+  sed -i 's/^# CONFIG_PACKAGE_luci-theme-argon is not set/CONFIG_PACKAGE_luci-theme-argon=y/' .config || true
+  if ! grep -q '^CONFIG_PACKAGE_luci-theme-argon=y' .config; then
+    echo 'CONFIG_PACKAGE_luci-theme-argon=y' >> .config
+  fi
+  if [ -d package/luci-app-argon-config ]; then
+    sed -i 's/^# CONFIG_PACKAGE_luci-app-argon-config is not set/CONFIG_PACKAGE_luci-app-argon-config=y/' .config || true
+    if ! grep -q '^CONFIG_PACKAGE_luci-app-argon-config=y' .config; then
+      echo 'CONFIG_PACKAGE_luci-app-argon-config=y' >> .config
+    fi
+  fi
+
+  # 明确关闭其它主题
+  for th in bootstrap material openwrt openwrt-2020 design netgear neobird infinityfreedom; do
+    sed -i "s/^CONFIG_PACKAGE_luci-theme-${th}=y/# CONFIG_PACKAGE_luci-theme-${th} is not set/" .config || true
+    if ! grep -q "CONFIG_PACKAGE_luci-theme-${th}" .config; then
+      echo "# CONFIG_PACKAGE_luci-theme-${th} is not set" >> .config
+    fi
+  done
+  log "已调整 .config：仅启用 luci-theme-argon。"
 fi
 
 # Do not force KERNEL_PATCHVER; follow upstream lede branch.
 
-settings_file="package/lean/default-settings/files/zzz-default-settings"
 build_date="$(date +%Y.%m.%d)"
 if [ -f "$settings_file" ]; then
   if grep -q '@BUILD_DATE@' "$settings_file"; then
