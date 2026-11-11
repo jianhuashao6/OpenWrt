@@ -8,7 +8,6 @@ name: X86设备编译固件 (lede-master)
 on:
   workflow_dispatch:
   repository_dispatch:
-  # 每周日 09:00 UTC（约北京时间 17:00 / 日本 18:00）自动拉取最新源码并编译
   schedule:
     - cron: '0 9 * * 0'
 
@@ -76,7 +75,6 @@ jobs:
           sudo mkdir -p /workdir
           sudo chown "$USER:$USER" /workdir
           ccache -M 5G || true
-          go version || true
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -142,11 +140,19 @@ jobs:
           chmod +x "$GITHUB_WORKSPACE/$DIY_P2_SH"
           "$GITHUB_WORKSPACE/$DIY_P2_SH"
           make defconfig
-          # 二次确保坏包不会被选中
-          if grep -q 'v2ray-plugin' .config 2>/dev/null; then
-            sed -i '/v2ray-plugin/d' .config || true
-            echo '# CONFIG_PACKAGE_v2ray-plugin is not set' >> .config
-            echo '# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set' >> .config
+          # 二次剔除易坏包（defconfig 可能重新勾上依赖）
+          NEED_RECFG=0
+          if grep -qE 'CONFIG_PACKAGE_(v2ray-plugin|geoview)=y' .config 2>/dev/null; then
+            sed -i \
+              -e 's/^CONFIG_PACKAGE_v2ray-plugin=y/# CONFIG_PACKAGE_v2ray-plugin is not set/' \
+              -e 's/^CONFIG_PACKAGE_geoview=y/# CONFIG_PACKAGE_geoview is not set/' \
+              -e 's/^CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=y/# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set/' \
+              .config || true
+            NEED_RECFG=1
+          fi
+          rm -rf feeds/packages/net/geoview package/feeds/packages/geoview \
+            feeds/helloworld/v2ray-plugin package/feeds/helloworld/v2ray-plugin 2>/dev/null || true
+          if [ "$NEED_RECFG" = 1 ]; then
             make defconfig
           fi
 
@@ -225,7 +231,7 @@ jobs:
             - Build time: ~${{ env.BUILD_MINUTES }} min
             - Repo: jianhuashao6/OpenWrt
             - Trigger: ${{ github.event_name }}
-            - Note: v2ray-plugin excluded (upstream build break)
+            - Note: v2ray-plugin / geoview excluded (upstream Go build break)
           files: ${{ env.FIRMWARE }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
