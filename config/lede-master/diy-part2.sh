@@ -10,6 +10,8 @@ die() { printf '[diy-part2] ERROR: %s\n' "$*" >&2; exit 1; }
 settings_file="package/lean/default-settings/files/zzz-default-settings"
 cfg_gen="package/base-files/files/bin/config_generate"
 DEFAULT_IP="192.168.100.253"
+# root 默认密码：password（MD5 crypt，常见 lean 固件哈希）
+ROOT_PASS_HASH='$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.'
 
 # ---------------------------------------------------------------------------
 # 0. 剔除上游易坏 Go 包（会导致整次编译失败）
@@ -170,4 +172,33 @@ if [ -f "$settings_file" ]; then
   sed -i "s/zonename='UTC'/zonename='Asia\/Shanghai'/g" "$settings_file" 2>/dev/null || true
 fi
 
-log "构建后自定义步骤完成（仅 Argon）。"
+# ---------------------------------------------------------------------------
+# 8. 默认 root 密码 = password
+# ---------------------------------------------------------------------------
+shadow_files=
+for f in \
+  package/base-files/files/etc/shadow \
+  package/base-files/files/etc/passwd
+do
+  [ -f "$f" ] || continue
+  if [ "$(basename "$f")" = shadow ]; then
+    if grep -q '^root:' "$f"; then
+      sed -i "s|^root:[^:]*:|root:${ROOT_PASS_HASH}:|" "$f"
+      log "已设置 $f 中 root 密码哈希（password）"
+    fi
+  fi
+done
+
+if [ -f "$settings_file" ]; then
+  # 首次启动脚本里写入 shadow（兼容 lean 空密码模板）
+  if ! grep -q "V4UetPzk" "$settings_file"; then
+    if grep -q '^exit 0' "$settings_file"; then
+      sed -i "/exit 0/i\sed -i 's|^root:[^:]*:|root:${ROOT_PASS_HASH}:|' /etc/shadow" "$settings_file"
+    else
+      printf "\nsed -i 's|^root:[^:]*:|root:%s:|' /etc/shadow\n" "$ROOT_PASS_HASH" >> "$settings_file"
+    fi
+    log "已在 default-settings 中设置 root 密码为 password"
+  fi
+fi
+
+log "构建后自定义步骤完成（仅 Argon，root/password）。"
