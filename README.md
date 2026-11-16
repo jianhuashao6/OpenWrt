@@ -11,6 +11,7 @@
 | 源码 | [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) `master`（每次重新拉取） |
 | 架构 | **X86_64** |
 | 默认 IP | `192.168.100.253` |
+| 默认账号 | `root` / 密码 **`password`** |
 | 主题 | **仅 Argon**（jerrykuku 源码编入） |
 | 时区 | Asia/Shanghai |
 | 定时 | 每周一 UTC 02:00 |
@@ -21,7 +22,8 @@
 2. （可选）改 `config/lede-master/`
 3. **Actions → X86设备编译固件 (lede-master) → Run workflow**（选 `main`）
 4. 成功后从 Artifact / **Releases** 下载
-5. 访问：`http://192.168.100.253`（`root`，密码空）
+5. 访问：`http://192.168.100.253`  
+   账号：`root`，密码：`password`（登录后请尽快修改）
 
 视频参考：https://www.youtube.com/watch?v=6j4ofS0GT38
 
